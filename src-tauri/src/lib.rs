@@ -58,16 +58,6 @@ fn get_env_status(state: State<'_, AppState>) -> Result<EnvStatus, String> {
     })
 }
 
-
-    Ok(EnvStatus {
-        elevated: elevation::is_elevated(),
-        engine_ready: env.is_ready(),
-        engine_binary: env.engine_binary.map(|p| p.to_string_lossy().into_owned()),
-        app_dir: env.app_dir.to_string_lossy().into_owned(),
-        running,
-    })
-}
-
 #[tauri::command]
 fn list_profiles(state: State<'_, AppState>) -> Result<ProfilesConfig, String> {
     state

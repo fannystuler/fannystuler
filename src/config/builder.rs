@@ -34,13 +34,13 @@ pub fn build_args(profile: &LaunchProfile) -> Result<Vec<String>, String> {
         }
     }
 
-    if let Some(ref hostlist) = profile.hostlist_path {
+    if let Some(hostlist) = profile.hostlist_path.as_deref() {
         args.push(format!("--hostlist={}", path_str(hostlist)));
     }
-    if let Some(ref exclude) = profile.hostlist_exclude_path {
+    if let Some(exclude) = profile.hostlist_exclude_path.as_deref() {
         args.push(format!("--hostlist-exclude={}", path_str(exclude)));
     }
-    if let Some(ref lua) = profile.lua_script_path {
+    if let Some(lua) = profile.lua_script_path.as_deref() {
         args.push(format!("--lua-init={}", path_str(lua)));
     }
 

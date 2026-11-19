@@ -42,12 +42,22 @@ pub struct CreateProfileInput {
 fn get_env_status(state: State<'_, AppState>) -> Result<EnvStatus, String> {
     let env = inspect_environment(None, "winws2.exe");
     let running = {
-        let mgr = state
+        let mut mgr = state
             .engine
             .try_lock()
             .map_err(|_| "Менеджер процесса занят".to_string())?;
         mgr.is_running()
     };
+
+    Ok(EnvStatus {
+        elevated: elevation::is_elevated(),
+        engine_ready: env.is_ready(),
+        engine_binary: env.engine_binary.map(|p| p.to_string_lossy().into_owned()),
+        app_dir: env.app_dir.to_string_lossy().into_owned(),
+        running,
+    })
+}
+
 
     Ok(EnvStatus {
         elevated: elevation::is_elevated(),

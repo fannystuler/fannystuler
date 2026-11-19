@@ -2,7 +2,6 @@
 name = "zapret2-gui"
 version = "0.1.0"
 edition = "2021"
-
 [dependencies]
 tokio = { version = "1", features = ["macros", "process", "io-util", "sync", "time", "rt-multi-thread"] }
 serde = { version = "1", features = ["derive"] }

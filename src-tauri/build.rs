@@ -1,7 +1,9 @@
 fn main() {
     #[cfg(target_os = "windows")]
     {
-        let _ = embed_resource::compile("windows-app.manifest", embed_resource::NONE);
+        println!("cargo:rerun-if-changed=windows-app.manifest");
+        println!("cargo:rustc-link-arg-bins=/MANIFEST:EMBED");
+        println!("cargo:rustc-link-arg-bins=/MANIFESTINPUT:windows-app.manifest");
     }
 
     tauri_build::build();

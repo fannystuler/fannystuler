@@ -1,27 +1,9 @@
 fn main() {
-    #[cfg(target_os = "windows")]
-    {
-        let manifest = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
-  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
-    <security>
-      <requestedPrivileges>
-        <requestedExecutionLevel level="requireAdministrator" uiAccess="false"/>
-      </requestedPrivileges>
-    </security>
-  </trustInfo>
-</assembly>
-"#;
-
-        let out_dir = std::env::var_os("OUT_DIR").expect("OUT_DIR не задан");
-        let manifest_path = std::path::PathBuf::from(out_dir).join("app.manifest");
-        std::fs::write(&manifest_path, manifest).expect("не удалось записать app.manifest");
-
-        println!("cargo:rustc-link-arg-bin=zapret2-gui=/MANIFEST:EMBED");
-        println!(
-            "cargo:rustc-link-arg-bin=zapret2-gui=/MANIFESTINPUT:{}",
-            manifest_path.display()
-        );
-        println!("cargo:rerun-if-changed=build.rs");
+    // The Windows runner's MSVC linker can fail while merging generated
+    // manifests with conflicting requestedExecutionLevel values (LNK1327).
+    // This application is a console utility and does not require an embedded
+    // execution-level manifest, so disable manifest generation for its binaries.
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
+        println!("cargo:rustc-link-arg-bins=/MANIFEST:NO");
     }
 }

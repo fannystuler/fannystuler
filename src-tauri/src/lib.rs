@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use serde::Serialize;
-use tauri::{Emitter, State};
+use tauri::{Emitter, Manager, State};
 use tokio::sync::Mutex as AsyncMutex;
 
 use config::{build_args, LaunchProfile, ProfileStorage, ProfilesConfig, Protocol, StrategyPreset};

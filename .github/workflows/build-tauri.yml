@@ -23,6 +23,66 @@ jobs:
         with:
           workspaces: src-tauri
 
+      - name: Generate 32x32 icon.ico
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path src-tauri/icons | Out-Null
+          $w = 32
+          $h = 32
+          $xorSize = $w * $h * 4
+          $andStride = [math]::Ceiling($w / 32) * 4
+          $andSize = $andStride * $h
+          $biSize = 40
+          $imgSize = $biSize + $xorSize + $andSize
+          $headerSize = 6 + 16
+
+          $ms = New-Object System.IO.MemoryStream
+          $bw = New-Object System.IO.BinaryWriter($ms)
+
+          # ICONDIR
+          $bw.Write([UInt16]0)
+          $bw.Write([UInt16]1) # 1 = ICO
+          $bw.Write([UInt16]1) # 1 image
+
+          # ICONDIRENTRY
+          $bw.Write([Byte]$w)
+          $bw.Write([Byte]$h)
+          $bw.Write([Byte]0)
+          $bw.Write([Byte]0)
+          $bw.Write([UInt16]1)
+          $bw.Write([UInt16]32)
+          $bw.Write([UInt32]$imgSize)
+          $bw.Write([UInt32]$headerSize)
+
+          # BITMAPINFOHEADER (biHeight = h * 2 для XOR + AND масок)
+          $bw.Write([UInt32]$biSize)
+          $bw.Write([Int32]$w)
+          $bw.Write([Int32]($h * 2))
+          $bw.Write([UInt16]1)
+          $bw.Write([UInt16]32)
+          $bw.Write([UInt32]0)
+          $bw.Write([UInt32]($xorSize + $andSize))
+          $bw.Write([Int32]0)
+          $bw.Write([Int32]0)
+          $bw.Write([UInt32]0)
+          $bw.Write([UInt32]0)
+
+          # XOR пиксели (B, G, R, A)
+          for ($i = 0; $i -lt ($w * $h); $i++) {
+            $bw.Write([Byte]246)
+            $bw.Write([Byte]130)
+            $bw.Write([Byte]59)
+            $bw.Write([Byte]255)
+          }
+
+          # AND маска (нули = непрозрачно)
+          $bw.Write((New-Object byte[] $andSize))
+
+          $bw.Flush()
+          [IO.File]::WriteAllBytes("src-tauri/icons/icon.ico", $ms.ToArray())
+          $bw.Close()
+          $ms.Close()
+
       - name: Build Tauri app (x86_64-pc-windows-msvc)
         shell: pwsh
         run: cargo build --release --manifest-path src-tauri/Cargo.toml --target x86_64-pc-windows-msvc

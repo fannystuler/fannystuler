@@ -2,13 +2,18 @@ mod config;
 mod elevation;
 mod engine;
 mod lists;
+mod menu;
 
-use std::path::PathBuf;
-use std::sync::Arc;
+fn main() {
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("не удалось создать Tokio runtime");
 
-use config::{build_args, LaunchProfile, Protocol, StrategyPreset};
-use engine::{EngineProcessManager, ProfileStorage};
-use lists::HostlistManager;
+    rt.block_on(async {
+        menu::run_menu().await;
+    });
+}
 
 fn main() {
     let rt = tokio::runtime::Builder::new_multi_thread()

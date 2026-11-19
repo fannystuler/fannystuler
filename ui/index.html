@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Zapret2 Manager</title>
+  <style>
+    :root {
+      --bg: #0f141a;
+      --card: #171f29;
+      --border: #283545;
+      --text: #e6edf3;
+      --muted: #8b9bb0;
+      --accent: #3b82f6;
+      --ok: #22c55e;
+      --warn: #eab308;
+      --danger: #ef4444;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 18px;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    h1 { margin: 0 0 14px; font-size: 20px; }
+    h2 { margin: 0 0 10px; font-size: 15px; color: var(--muted); }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+    }
+    .row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    input, select, button {
+      border-radius: 7px;
+      border: 1px solid var(--border);
+      background: #0f141a;
+      color: var(--text);
+      padding: 8px 10px;
+      font-size: 13px;
+    }
+    input, select { flex: 1; min-width: 120px; }
+    button {
+      cursor: pointer;
+      background: #1f2b3a;
+      font-weight: 500;
+    }
+    button:hover { background: #29394d; }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    button.danger { background: #3a191d; border-color: #7f1d1d; color: #fecaca; }
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      background: #1f2b3a;
+      margin-right: 6px;
+      margin-bottom: 6px;
+    }
+    .ok { color: var(--ok); }
+    .warn { color: var(--warn); }
+    .err { color: var(--danger); }
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    #logs {
+      height: 200px;
+      overflow-y: auto;
+      background: #0b0f14;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+    }
+    .small { font-size: 12px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <h1>Zapret2 Manager</h1>
+
+  <div class="card" style="margin-bottom: 14px;">
+    <h2>Состояние окружения</h2>
+    <div id="status-badges">Загрузка...</div>
+    <div id="env-details" class="small mono"></div>
+    <div class="row" style="margin-top: 10px; margin-bottom: 0;">
+      <button class="primary" onclick="onStart()">Запустить движок</button>
+      <button class="danger" onclick="onStop()">Остановить движок</button>
+      <button onclick="refreshAll()">Обновить статус</button>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Профили запуска</h2>
+      <div class="row">
+        <select id="profile-select"></select>
+        <button onclick="onSelectProfile()">Выбрать</button>
+      </div>
+      <div class="row">
+        <input id="new-profile-name" placeholder="Новый профиль (например, YouTube TCP)" />
+        <input id="new-profile-ports" value="443" style="max-width: 90px;" title="Порты через запятую" />
+      </div>
+      <div class="row" style="margin-bottom: 0;">
+        <input id="new-profile-ttl" type="number" value="3" min="1" max="255" style="max-width: 75px;" title="TTL" />
+        <input id="new-profile-split" type="number" value="2" min="1" max="1500" style="max-width: 85px;" title="Split pos" />
+        <button onclick="onCreateProfile()">Создать профиль</button>
+        <button onclick="onPreviewArgs()">Аргументы</button>
+      </div>
+      <div id="args-preview" class="mono small" style="margin-top: 8px;"></div>
+    </div>
+
+    <div class="card">
+      <h2>Hostlist (домены)</h2>
+      <div class="row">
+        <input id="domain-input" placeholder="example.com или https://..." />
+        <button onclick="onAddDomain()">Добавить</button>
+      </div>
+      <div id="domains-list" class="mono small">Список пуст</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Логи движка</h2>
+    <div id="logs" class="mono"></div>
+  </div>
+
+  <script>
+    const invoke = window.__TAURI__?.core?.invoke;
+    const listen = window.__TAURI__?.event?.listen;
+
+    function appendLog(text, cls = "") {
+      const box = document.getElementById("logs");
+      const line = document.createElement("div");
+      if (cls) line.className = cls;
+      line.textContent = text;
+      box.appendChild(line);
+      box.scrollTop = box.scrollHeight;
+    }
+
+    async function refreshStatus() {
+      const s = await invoke("get_env_status");
+      const badges = document.getElementById("status-badges");
+      badges.innerHTML = `
+        <span class="badge ${s.elevated ? "ok" : "warn"}">Администратор: ${s.elevated ? "ДА" : "НЕТ"}</span>
+        <span class="badge ${s.engine_ready ? "ok" : "err"}">winws2.exe: ${s.engine_ready ? "найден" : "не найден"}</span>
+        <span class="badge ${s.running ? "ok" : ""}">Процесс: ${s.running ? "ЗАПУЩЕН" : "остановлен"}</span>
+      `;
+      document.getElementById("env-details").textContent =
+        `Папка: ${s.app_dir}\nБинарник: ${s.engine_binary || "—"}`;
+    }
+
+    async function refreshProfiles() {
+      const cfg = await invoke("list_profiles");
+      const sel = document.getElementById("profile-select");
+      sel.innerHTML = "";
+      for (const p of cfg.profiles || []) {
+        const opt = document.createElement("option");
+        opt.value = p.name;
+        opt.textContent = p.name === cfg.active_profile ? `* ${p.name}` : p.name;
+        if (p.name === cfg.active_profile) opt.selected = true;
+        sel.appendChild(opt);
+      }
+      if (!cfg.profiles || cfg.profiles.length === 0) {
+        const opt = document.createElement("option");
+        opt.value = "";
+        opt.textContent = "Профилей пока нет";
+        sel.appendChild(opt);
+      }
+    }
+
+    async function refreshAll() {
+      try {
+        await Promise.all([refreshStatus(), refreshProfiles()]);
+      } catch (e) {
+        appendLog(`[UI] Ошибка обновления: ${e}`, "err");
+      }
+    }
+
+    async function onSelectProfile() {
+      const name = document.getElementById("profile-select").value;
+      if (!name) return;
+      try {
+        await invoke("set_active_profile", { name });
+        appendLog(`[UI] Выбран профиль: ${name}`);
+        await refreshProfiles();
+      } catch (e) {
+        appendLog(`[UI] ${e}`, "err");
+      }
+    }
+
+    async function onCreateProfile() {
+      const name = document.getElementById("new-profile-name").value.trim();
+      const portsRaw = document.getElementById("new-profile-ports").value;
+      const ttl = Number(document.getElementById("new-profile-ttl").value) || 3;
+      const splitPos = Number(document.getElementById("new-profile-split").value) || 2;
+      const ports = portsRaw
+        .split(",")
+        .map((x) => Number(x.trim()))
+        .filter((n) => Number.isInteger(n) && n > 0 && n <= 65535);
+
+      try {
+        await invoke("create_https_profile", {
+          name,
+          ports: ports.length ? ports : [443],
+          ttl,
+          splitPos,
+          debug: false,
+        });
+        document.getElementById("new-profile-name").value = "";
+        appendLog(`[UI] Создан профиль: ${name}`);
+        await refreshProfiles();
+      } catch (e) {
+        appendLog(`[UI] ${e}`, "err");
+      }
+    }
+
+    async function onPreviewArgs() {
+      try {
+        const args = await invoke("preview_active_args");
+        document.getElementById("args-preview").textContent = args.join(" ");
+      } catch (e) {
+        appendLog(`[UI] ${e}`, "err");
+      }
+    }
+
+    async function onAddDomain() {
+      const input = document.getElementById("domain-input");
+      const domain = input.value.trim();
+      if (!domain) return;
+      try {
+        const list = await invoke("add_host_domain", { domain });
+        input.value = "";
+        document.getElementById("domains-list").textContent = list.join("\n") || "Список пуст";
+        appendLog(`[UI] Добавлен домен: ${domain}`);
+      } catch (e) {
+        appendLog(`[UI] ${e}`, "err");
+      }
+    }
+
+    async function onStart() {
+      try {
+        const args = await invoke("start_engine");
+        appendLog(`[UI] Движок запущен с аргументами: ${args.join(" ")}`, "ok");
+        await refreshStatus();
+      } catch (e) {
+        appendLog(`[UI] ${e}`, "err");
+      }
+    }
+
+    async function onStop() {
+      try {
+        await invoke("stop_engine");
+        appendLog("[UI] Движок остановлен", "warn");
+        await refreshStatus();
+      } catch (e) {
+        appendLog(`[UI] ${e}`, "err");
+      }
+    }
+
+    window.addEventListener("DOMContentLoaded", async () => {
+      if (!invoke || !listen) {
+        appendLog("[UI] Tauri API не найден (открыто вне WebView Tauri)", "warn");
+        return;
+      }
+      await listen("engine-log", (event) => {
+        const p = event.payload || {};
+        appendLog(`[${p.stream || "log"}] ${p.message || ""}`);
+      });
+      await refreshAll();
+    });
+  </script>
+</body>
+</html>

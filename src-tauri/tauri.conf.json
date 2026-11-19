@@ -10,8 +10,8 @@
     "windows": [
       {
         "title": "Zapret2 Manager",
-        "width": 900,
-        "height": 620,
+        "width": 920,
+        "height": 640,
         "resizable": true
       }
     ],
@@ -23,6 +23,7 @@
     "active": true,
     "targets": "all",
     "windows": {
+      "manifestPath": "./windows-app.manifest",
       "webviewInstallMode": {
         "type": "downloadBootstrapper"
       },

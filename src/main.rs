@@ -6,8 +6,8 @@ mod lists;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use config::{build_args, LaunchProfile, ProfileStorage, Protocol, StrategyPreset};
-use engine::EngineProcessManager;
+use config::{build_args, LaunchProfile, Protocol, StrategyPreset};
+use engine::ProfileStorage;
 use lists::HostlistManager;
 
 fn main() {

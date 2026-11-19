@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use config::{build_args, LaunchProfile, Protocol, StrategyPreset};
-use engine::ProfileStorage;
+use engine::{EngineProcessManager, ProfileStorage};
 use lists::HostlistManager;
 
 fn main() {
@@ -26,16 +26,6 @@ fn main() {
             println!("Не найдено: {:?}", env_info.missing_components);
         }
 
-        let storage = ProfileStorage::new("./config/profiles.json");
-        match storage.load_or_init() {
-            Ok(cfg) => println!(
-                "Загружено профилей: {}, активный: {:?}",
-                cfg.profiles.len(),
-                cfg.active_profile
-            ),
-            Err(err) => eprintln!("Ошибка хранения профилей: {err}"),
-        }
-
         let profile = LaunchProfile {
             name: "HTTPS Основной".to_string(),
             protocol: Protocol::Tcp,
@@ -50,7 +40,38 @@ fn main() {
             debug: true,
         };
 
-        match build_args(&profile) {
+        // Загружаем настройки, обновляем встроенный профиль и сохраняем его в JSON.
+        let storage = ProfileStorage::new("./config/profiles.json");
+        let mut profiles = match storage.load_or_init() {
+            Ok(config) => config,
+            Err(err) => {
+                eprintln!("Ошибка загрузки профилей: {err}");
+                return;
+            }
+        };
+
+        if let Some(existing) = profiles.profiles.iter_mut().find(|p| p.name == profile.name) {
+            *existing = profile.clone();
+        } else {
+            profiles.profiles.push(profile.clone());
+        }
+        profiles.active_profile = Some(profile.name.clone());
+
+        if let Err(err) = storage.save(&profiles) {
+            eprintln!("Ошибка сохранения профилей: {err}");
+            return;
+        }
+
+        let active_profile = profiles
+            .active_profile
+            .as_deref()
+            .and_then(|name| profiles.profiles.iter().find(|p| p.name == name))
+            .cloned()
+            .unwrap_or(profile);
+        println!("Сохранено профилей: {}", profiles.profiles.len());
+        println!("Активный профиль: {}", active_profile.name);
+
+        match build_args(&active_profile) {
             Ok(args) => println!("Аргументы запуска: {:?}", args),
             Err(err) => eprintln!("Ошибка конфигурации: {err}"),
         }

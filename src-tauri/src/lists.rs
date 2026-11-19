@@ -1,7 +1,3 @@
-$listsPath = "src-tauri/src/lists.rs"
-if (-not (Test-Path $listsPath)) {
-    New-Item -ItemType Directory -Force -Path (Split-Path $listsPath) | Out-Null
-    @'
 use std::fs;
 use std::io;
 use std::path::Path;
@@ -19,8 +15,12 @@ impl HostlistManager {
     pub fn add_domain(&mut self, domain: &str) -> io::Result<()> {
         let cleaned = domain.trim().to_lowercase();
         if cleaned.is_empty() {
-            return Err(io::Error::new(io::ErrorKind::InvalidInput, "Пустой домен"));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Пустой домен",
+            ));
         }
+
         if !self.domains.contains(&cleaned) {
             self.domains.push(cleaned);
         }
@@ -33,9 +33,11 @@ impl HostlistManager {
                 fs::create_dir_all(parent)?;
             }
         }
-        let content = self.domains.join("\n") + if self.domains.is_empty() { "" } else { "\n" };
+
+        let mut content = self.domains.join("\n");
+        if !content.is_empty() {
+            content.push('\n');
+        }
         fs::write(path, content)
     }
-}
-'@ | Set-Content -Path $listsPath -Encoding UTF8
 }

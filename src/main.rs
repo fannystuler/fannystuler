@@ -6,7 +6,7 @@ mod lists;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use config::{build_args, LaunchProfile, Protocol, StrategyPreset};
+use config::{build_args, LaunchProfile, ProfileStorage, Protocol, StrategyPreset};
 use engine::EngineProcessManager;
 use lists::HostlistManager;
 
@@ -18,6 +18,23 @@ fn main() {
 
     rt.block_on(async {
         println!("Проверка прав администратора: {}", elevation::is_elevated());
+
+        let env_info = engine::inspect_environment(None, "winws2.exe");
+        println!("Готов к запуску движка: {}", env_info.is_ready());
+        println!("Найденный бинарник: {:?}", env_info.engine_binary);
+        if !env_info.missing_components.is_empty() {
+            println!("Не найдено: {:?}", env_info.missing_components);
+        }
+
+        let storage = ProfileStorage::new("./config/profiles.json");
+        match storage.load_or_init() {
+            Ok(cfg) => println!(
+                "Загружено профилей: {}, активный: {:?}",
+                cfg.profiles.len(),
+                cfg.active_profile
+            ),
+            Err(err) => eprintln!("Ошибка хранения профилей: {err}"),
+        }
 
         let profile = LaunchProfile {
             name: "HTTPS Основной".to_string(),
@@ -48,4 +65,3 @@ fn main() {
         }));
     });
 }
-

@@ -95,12 +95,17 @@ pub async fn run_menu() {
                     eprintln!("Активный профиль не найден.");
                     continue;
                 };
-                match build_args(profile) {
-                    Ok(args) => {
-                        if let Err(e) = manager.start(bin_path, args).await {
-                            eprintln!("Ошибка запуска движка: {e}");
-                        }
-                    }
+              match build_args(profile) {
+    Ok(args) => {
+        if let Err(e) = manager
+            .start(bin_path, Some(env_info.app_dir), &args)
+            .await
+        {
+            eprintln!("Ошибка запуска движка: {e}");
+        }
+    }
+    Err(e) => eprintln!("Ошибка аргументов: {e}"),
+}
                     Err(e) => eprintln!("Ошибка аргументов: {e}"),
                 }
             }

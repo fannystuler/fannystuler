@@ -18,17 +18,20 @@
     "security": {
       "csp": null
     }
-  },
-  "bundle": {
+  }
+    "bundle": {
     "active": true,
     "targets": "all",
     "windows": {
-      "manifestPath": "./windows-app.manifest",
       "webviewInstallMode": {
         "type": "downloadBootstrapper"
       },
       "nsis": {
         "installerIcon": null
+      }
+    }
+  }
+
       }
     }
   }

@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-tokio = { version = "1", features = ["process", "io-util", "sync", "time", "rt-multi-thread"] }
+tokio = { version = "1", features = ["macros", "process", "io-util", "sync", "time", "rt-multi-thread"] }
 serde = { version = "1", features = ["derive"] }
 thiserror = "1"
 
@@ -14,3 +14,4 @@ windows-sys = { version = "0.59", features = [
     "Win32_Security",
     "Win32_System_Threading",
 ] }
+

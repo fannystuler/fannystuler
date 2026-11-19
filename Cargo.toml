@@ -1,0 +1,16 @@
+[package]
+name = "zapret2-gui"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1", features = ["process", "io-util", "sync", "time", "rt-multi-thread"] }
+serde = { version = "1", features = ["derive"] }
+thiserror = "1"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_Threading",
+] }

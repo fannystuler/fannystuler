@@ -1,0 +1,10 @@
+    pub async fn start<P: AsRef<Path>>(
+        &self,
+        binary_path: P,
+        working_dir: Option<P>,
+        args: &[String],
+    ) -> Result<(), ProcessError> {
+        let binary_path = binary_path.as_ref().to_path_buf();
+        if !binary_path.is_file() {
+            return Err(ProcessError::BinaryNotFound(binary_path));
+        }

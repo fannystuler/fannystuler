@@ -1,16 +1,26 @@
-## Hi there 👋
+# zapret2-gui
 
-<!--
-**fannystuler/fannystuler** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.
+Прототип консольного Rust-приложения для формирования аргументов `zapret2` и управления дочерним процессом на Windows.
 
-Here are some ideas to get you started:
+## Возможности
 
-- 🔭 I’m currently working on ...
-- 🌱 I’m currently learning ...
-- 👯 I’m looking to collaborate on ...
-- 🤔 I’m looking for help with ...
-- 💬 Ask me about ...
-- 📫 How to reach me: ...
-- 😄 Pronouns: ...
-- ⚡ Fun fact: ...
--->
+- проверка прав администратора;
+- конфигурация протокола и портов;
+- предустановки DPI-десинхронизации;
+- загрузка и сохранение доменных списков;
+- запуск и остановка внешнего исполняемого файла с чтением вывода;
+
+## Сборка
+
+```powershell
+cargo build --release
+```
+
+Для сборки Windows-бинарника нужен MSVC target:
+
+```powershell
+rustup target add x86_64-pc-windows-msvc
+cargo build --release --target x86_64-pc-windows-msvc
+```
+
+Сборка также запускается через GitHub Actions workflow `Build Windows EXE (Rust)`.

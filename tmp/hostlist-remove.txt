@@ -1,0 +1,10 @@
+    pub fn remove_domain(&mut self, domain: &str) -> bool {
+        let target = match normalize_domain(domain) {
+            Ok(Some(domain)) => domain,
+            Ok(None) | Err(_) => return false,
+        };
+
+        let before = self.domains.len();
+        self.domains.retain(|d| d != &target);
+        self.domains.len() < before
+    }

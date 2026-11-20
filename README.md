@@ -1,1 +1,1 @@
-бот тест
+Restore the previous README content, or replace the placeholder with real documentation before merging.

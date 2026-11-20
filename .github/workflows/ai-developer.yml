@@ -157,7 +157,7 @@ jobs:
 
           if not changed:
               print("No file changes produced by AI.")
-              sys.exit(0)
+              import sys
 
           print("Changed files:", ", ".join(changed))
           PY

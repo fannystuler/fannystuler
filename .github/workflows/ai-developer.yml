@@ -6,11 +6,11 @@ on:
   workflow_dispatch:
     inputs:
       task:
-        description: "Задача для AI-разработчика (например: исправить lib.rs и настроить сборку)"
+        description: "Задача для AI-разработчика"
         required: true
         type: string
       target_branch:
-        description: "Целевая ветка для PR"
+        description: "Базовая ветка для pull request"
         required: false
         default: "main"
         type: string
@@ -24,23 +24,9 @@ jobs:
   develop:
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      if: >-
-        github.event_name == 'workflow_dispatch' ||
-        (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'ai-dev') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association))
-        github.event_name == 'workflow_dispatch' ||
-        (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'ai-dev') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association))
-        github.event_name == 'workflow_dispatch' ||
-        (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'ai-dev') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association))
-        github.event_name == 'workflow_dispatch' ||
-        (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'ai-dev') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association))
-        github.event_name == 'workflow_dispatch' ||
-        (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'ai-dev') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association))
-        github.event_name == 'workflow_dispatch' ||
-        (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'ai-dev') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association))
-        github.event_name == 'workflow_dispatch' ||
-        (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'ai-dev') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association))
-        github.event_name == 'workflow_dispatch' ||
-        (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'ai-dev') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association))
+      (github.event_name == 'issues' &&
+       contains(github.event.issue.labels.*.name, 'ai-dev') &&
+       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association))
     runs-on: ubuntu-latest
 
     steps:
@@ -78,50 +64,44 @@ jobs:
           task = os.environ["TASK_PROMPT"]
 
           ignore_dirs = {".git", "target", "node_modules"}
+          allow_ext = {".rs", ".toml", ".json", ".md", ".yml", ".yaml", ".html", ".css", ".js", ".ts", ".tsx"}
           files_context = []
           total_chars = 0
           max_total_chars = 120000
 
-          allow_ext = {".rs", ".toml", ".json", ".md", ".yml", ".yaml"}
-          if os.path.splitext(fname)[1] not in allow_ext:
-              continue
+          for root, dirs, files in os.walk("."):
               dirs[:] = [d for d in dirs if d not in ignore_dirs]
               for fname in sorted(files):
-                  fpath = os.path.join(root, fname)
                   if fname.endswith((".png", ".jpg", ".jpeg", ".ico", ".exe", ".dll", ".sys", ".lock")):
                       continue
+
+                  fpath = os.path.join(root, fname)
+                  rel_path = os.path.normpath(fpath)
+                  if os.path.splitext(fname)[1] not in allow_ext:
+                      continue
+
                   try:
                       with open(fpath, "r", encoding="utf-8") as f:
                           content = f.read()
-                  except Exception:
+                  except (OSError, UnicodeDecodeError):
                       continue
+
                   if len(content) > 25000:
                       content = content[:25000] + "\n... [truncated]"
                   if total_chars + len(content) > max_total_chars:
                       continue
+
                   total_chars += len(content)
-                  files_context.append(f"### FILE: {fpath}\n```\n{content}\n```")
+                  files_context.append(f"### FILE: {rel_path}\n```\n{content}\n```")
 
-          system_prompt = """Ты — senior Rust / Tauri v2 / Windows developer для проекта zapret2-gui (GUI-оболочка под Windows для управления процессом winws2.exe).
-          Контекст:
-          - Стек: Tauri v2, Rust, таргет x86_64-pc-windows-msvc, манифест src-tauri/Cargo.toml, CI в .github/workflows/.
-          - Модули: lib.rs, config.rs, elevation.rs, engine.rs, lists.rs.
-          - Пути окружения: ./config/profiles.json, ./lists/list-general.txt, бинарник winws2.exe, иконка src-tauri/icons/icon.ico.
-          - Команды Tauri: get_env_status, list_profiles, set_active_profile, create_https_profile, preview_active_args, add_host_domain, start_engine, stop_engine; событие "engine-log".
-
-          Верни СТРОГО валидный JSON без markdown-обертки вида:
+          system_prompt = """Ты senior Rust/Tauri/Windows-разработчик проекта zapret2-gui.
+          Выполняй только явно поставленную задачу.
+          Верни строго валидный JSON без Markdown:
           {
             "summary": "краткое описание изменений",
-            "files": [
-              {
-                "path": "путь/к/файлу",
-                "content": "полное новое содержимое файла"
-              }
-            ]
+            "files": [{"path": "путь/к/файлу", "content": "полное новое содержимое файла"}]
           }
-          Не добавляй заглушек вроде todo!() или // .... Вноси только нужные для задачи правки."""
-
-          user_prompt = f"Задача:\n{task}\n\nФайлы репозитория:\n\n" + "\n\n".join(files_context)
+          Не добавляй заглушки вроде todo!() или // ..."""
 
           payload = {
               "model": "deepseek-chat",
@@ -129,7 +109,7 @@ jobs:
               "response_format": {"type": "json_object"},
               "messages": [
                   {"role": "system", "content": system_prompt},
-                  {"role": "user", "content": user_prompt},
+                  {"role": "user", "content": f"Задача:\n{task}\n\nФайлы репозитория:\n\n" + "\n\n".join(files_context)},
               ],
           }
 
@@ -148,12 +128,8 @@ jobs:
                   body = json.loads(resp.read().decode("utf-8"))
               raw_text = body["choices"][0]["message"]["content"]
               result = json.loads(raw_text)
-          except Exception as e:
-              raise SystemExit(f"AI request failed: {e}")
-              body = json.loads(resp.read().decode("utf-8"))
-
-          raw_text = body["choices"][0]["message"]["content"]
-          result = json.loads(raw_text)
+          except Exception as exc:
+              raise SystemExit(f"AI request failed: {exc}")
 
           changed = []
           for item in result.get("files", []):
@@ -169,40 +145,51 @@ jobs:
           with open("ai_dev_summary.txt", "w", encoding="utf-8") as f:
               f.write(result.get("summary", "AI developer changes"))
 
+          with open("changed_files.txt", "w", encoding="utf-8") as f:
+              f.write("\n".join(changed))
+
           if not changed:
               print("No file changes produced by AI.")
-              import sys
-
-          print("Changed files:", ", ".join(changed))
+          else:
+              print("Changed files:", ", ".join(changed))
           PY
 
       - name: Create branch, commit and open Pull Request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_BRANCH: ${{ github.event_name == 'workflow_dispatch' && inputs.target_branch || 'main' }}
         shell: bash
         run: |
           set -euo pipefail
 
-          if [ -z "$(git status --porcelain)" ]; then
-            echo "Nothing to commit."
+          if [ ! -s changed_files.txt ]; then
+            echo "No file changes produced by AI."
             exit 0
           fi
 
+          git ls-remote --exit-code --heads origin "$BASE_BRANCH" >/dev/null || {
+            echo "Unknown base branch: $BASE_BRANCH"
+            exit 1
+          }
+
+          SUMMARY=$(head -c 200 ai_dev_summary.txt | tr '\n' ' ')
           BRANCH_NAME="ai-dev/${GITHUB_RUN_ID}"
-          SUMMARY=$(cat ai_dev_summary.txt)
-          rm -f ai_dev_summary.txt
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git checkout -b "$BRANCH_NAME"
-          Записать список изменённых файлов в файл (например, changed_files.txt) в Python-шаге и читать его здесь: git add -- $(cat changed_files.txt)
-          SUMMARY=$(head -c 200 ai_dev_summary.txt | tr '\n' ' ')
-          rm -f ai_dev_summary.txt
-          BRANCH_NAME="ai-dev/issue-${ISSUE_NUMBER:-${GITHUB_RUN_ID}}"
+          git add -- $(cat changed_files.txt)
+          git diff --cached --quiet && {
+            echo "Nothing to commit."
+            exit 0
+          }
+          git commit -m "AI Dev: ${SUMMARY}"
+          git push origin "HEAD:$BRANCH_NAME"
 
           gh pr create \
-            git ls-remote --exit-code --heads origin "$BASE_BRANCH" >/dev/null || { echo "Unknown base branch: $BASE_BRANCH"; exit 1; }
+            --repo "${GITHUB_REPOSITORY}" \
+            --base "$BASE_BRANCH" \
             --head "$BRANCH_NAME" \
             --title "AI Dev: ${SUMMARY}" \
-            --body "Автоматически сгенерировано workflow \`AI Developer\` (run \`${GITHUB_RUN_ID}\`)."
-        env:
-          GH_TOKEN: ${{ github.token }}
+            --body "Автоматически сгенерировано workflow AI Developer (run ${GITHUB_RUN_ID})."

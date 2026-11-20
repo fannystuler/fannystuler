@@ -181,7 +181,7 @@ jobs:
 
           git checkout -b "$BRANCH_NAME"
           git add -- $(printf '%s\n' "${CHANGED_FILES[@]}")
-          git commit -m "feat(ai-dev): ${SUMMARY}"
+          SUMMARY=$(head -c 200 ai_dev_summary.txt | tr '\n' ' ')
           git push -u origin "$BRANCH_NAME"
 
           gh pr create \

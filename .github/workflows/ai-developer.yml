@@ -182,6 +182,7 @@ jobs:
           git checkout -b "$BRANCH_NAME"
           Записать список изменённых файлов в файл (например, changed_files.txt) в Python-шаге и читать его здесь: git add -- $(cat changed_files.txt)
           SUMMARY=$(head -c 200 ai_dev_summary.txt | tr '\n' ' ')
+          rm -f ai_dev_summary.txt
           BRANCH_NAME="ai-dev/issue-${ISSUE_NUMBER:-${GITHUB_RUN_ID}}"
 
           gh pr create \

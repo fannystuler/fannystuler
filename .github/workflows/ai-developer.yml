@@ -44,7 +44,6 @@ jobs:
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           TASK_PROMPT: ${{ github.event_name == 'workflow_dispatch' && inputs.task || format('{0}\n\n{1}', github.event.issue.title, github.event.issue.body) }}
-          BASE_BRANCH: ${{ github.event_name == 'workflow_dispatch' && inputs.target_branch || 'main' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -61,42 +60,37 @@ jobs:
 
           api_key = os.environ["DEEPSEEK_API_KEY"]
           task = os.environ["TASK_PROMPT"]
+          ignored_dirs = {".git", "target", "node_modules", ".github/workflows"}
+          allowed_extensions = {".rs", ".toml", ".json", ".md", ".yml", ".yaml", ".html", ".css", ".js", ".ts", ".tsx"}
+          context = []
+          context_size = 0
+          context_limit = 30000
 
-          ignore_dirs = {".git", "target", "node_modules", ".github/workflows"}
-          allow_ext = {".rs", ".toml", ".json", ".md", ".yml", ".yaml", ".html", ".css", ".js", ".ts", ".tsx"}
-          files_context = []
-          total_chars = 0
-          max_total_chars = 30000
-
-          for root, dirs, files in os.walk("."):
-              dirs[:] = [d for d in dirs if d not in ignore_dirs]
-              for fname in sorted(files):
-                  if fname.endswith((".png", ".jpg", ".jpeg", ".ico", ".exe", ".dll", ".sys", ".lock")):
+          for root, dirs, filenames in os.walk("."):
+              dirs[:] = [directory for directory in dirs if directory not in ignored_dirs]
+              for filename in sorted(filenames):
+                  if filename.endswith((".png", ".jpg", ".jpeg", ".ico", ".exe", ".dll", ".sys", ".lock")):
                       continue
-                  fpath = os.path.join(root, fname)
-                  rel_path = os.path.normpath(fpath)
-                  if os.path.splitext(fname)[1] not in allow_ext:
+                  path = os.path.normpath(os.path.join(root, filename))
+                  if os.path.splitext(filename)[1] not in allowed_extensions:
                       continue
                   try:
-                      with open(fpath, "r", encoding="utf-8") as f:
-                          content = f.read()
+                      with open(path, "r", encoding="utf-8") as source:
+                          content = source.read()
                   except (OSError, UnicodeDecodeError):
                       continue
                   if len(content) > 6000:
                       content = content[:6000] + "\n... [truncated]"
-                  if total_chars + len(content) > max_total_chars:
+                  if context_size + len(content) > context_limit:
                       continue
-                  total_chars += len(content)
-                  files_context.append(f"### FILE: {rel_path}\n{content}")
+                  context_size += len(content)
+                  context.append(f"### FILE: {path}\n{content}")
 
           system_prompt = """Ты senior Rust/Tauri/Windows-разработчик проекта zapret2-gui.
           Выполняй только явно поставленную задачу.
-          Верни СТРОГО валидный JSON БЕЗ Markdown и пояснений.
-          Схема:
+          Верни строго JSON без Markdown:
           {"summary":"краткое описание изменений","files":[{"path":"путь/к/файлу","content":"полное новое содержимое файла"}]}
-          Поле content должно быть одной компактной JSON-строкой с экранированными переносами и кавычками.
-          Не изменяй .github/workflows.
-          Не добавляй заглушки todo!() или // ..."""
+          Не изменяй .github/workflows. Содержимое content должно быть корректно экранировано согласно JSON."""
 
           payload = {
               "model": "deepseek-chat",
@@ -104,74 +98,79 @@ jobs:
               "response_format": {"type": "json_object"},
               "messages": [
                   {"role": "system", "content": system_prompt},
-                  {"role": "user", "content": f"Задача:\n{task}\n\nКлючевые файлы репозитория:\n\n" + "\n\n".join(files_context)},
+                  {"role": "user", "content": f"Задача:\n{task}\n\nФайлы репозитория:\n\n" + "\n\n".join(context)},
               ],
           }
-
-          req = urllib.request.Request(
+          request = urllib.request.Request(
               "https://api.deepseek.com/chat/completions",
               data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-              headers={
-                  "Content-Type": "application/json",
-                  "Authorization": f"Bearer {api_key}",
-              },
+              headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
               method="POST",
           )
 
           try:
-              with urllib.request.urlopen(req, timeout=120) as resp:
-                  body = json.loads(resp.read().decode("utf-8"))
-              raw_text = body["choices"][0]["message"]["content"].strip()
-
-              if raw_text.startswith("```"):
-                  raw_text = raw_text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-
-              start = raw_text.find("{")
-              end = raw_text.rfind("}")
-              if start >= 0 and end >= start:
-                  raw_text = raw_text[start:end + 1]
-
-              result = json.loads(raw_text)
+              with urllib.request.urlopen(request, timeout=180) as response:
+                  api_response = json.loads(response.read().decode("utf-8"))
+              choice = api_response["choices"][0]
+              raw_text = choice["message"]["content"]
+              finish_reason = choice.get("finish_reason", "unknown")
           except Exception as exc:
-              raise SystemExit(f"AI request failed or returned invalid JSON: {exc}")
+              raise SystemExit(f"DeepSeek API request failed: {exc}")
+
+          def write_report(reason):
+              with open("ai_dev_report.md", "w", encoding="utf-8") as report:
+                  report.write("# AI Developer: ответ не обработан\n\n")
+                  report.write(f"Причина: {reason}\n\n")
+                  report.write(f"Завершение ответа модели: {finish_reason}\n\n")
+                  report.write("## Исходный ответ модели\n\n")
+                  report.write("```text\n")
+                  report.write(raw_text)
+                  if not raw_text.endswith("\n"):
+                      report.write("\n")
+                  report.write("```\n")
+              open("changed_files.txt", "w", encoding="utf-8").close()
+              print(f"AI response could not be parsed; report saved to ai_dev_report.md: {reason}")
+
+          try:
+              result = json.loads(raw_text)
+              if not isinstance(result, dict) or not isinstance(result.get("files", []), list):
+                  raise ValueError("JSON response must be an object with a files array")
+          except (json.JSONDecodeError, ValueError) as exc:
+              write_report(f"Invalid or incomplete JSON: {exc}")
+              raise SystemExit(0)
 
           changed = []
           for item in result.get("files", []):
-              if not isinstance(item, dict):
-                  raise SystemExit("Invalid files entry returned by AI")
-              rel_path = os.path.normpath(item["path"])
-              if os.path.isabs(rel_path) or rel_path.startswith(".."):
-                  raise SystemExit(f"Refusing unsafe path: {rel_path}")
-              if rel_path.startswith(".github/workflows"):
-                  raise SystemExit(f"Refusing workflow path: {rel_path}")
-              new_content = item["content"]
-              os.makedirs(os.path.dirname(rel_path) or ".", exist_ok=True)
-              with open(rel_path, "w", encoding="utf-8", newline="\n") as f:
-                  f.write(new_content)
-              changed.append(rel_path)
+              if not isinstance(item, dict) or not isinstance(item.get("path"), str) or not isinstance(item.get("content"), str):
+                  write_report("Invalid file entry: each entry needs string path and content fields")
+                  raise SystemExit(0)
+              path = os.path.normpath(item["path"])
+              if os.path.isabs(path) or path == ".." or path.startswith(".." + os.sep):
+                  raise SystemExit(f"Refusing unsafe path: {path}")
+              if path.startswith(".github/workflows" + os.sep) or path == ".github/workflows":
+                  raise SystemExit(f"Refusing workflow path: {path}")
+              os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+              with open(path, "w", encoding="utf-8", newline="\n") as output:
+                  output.write(item["content"])
+              changed.append(path)
 
-          with open("ai_dev_summary.txt", "w", encoding="utf-8") as f:
-              f.write(result.get("summary", "AI developer changes"))
-
-          with open("changed_files.txt", "w", encoding="utf-8") as f:
-              f.write("\n".join(changed))
-
-          if not changed:
-              print("No file changes produced by AI.")
-          else:
-              print("Changed files:", ", ".join(changed))
+          with open("ai_dev_summary.txt", "w", encoding="utf-8") as summary:
+              summary.write(str(result.get("summary", "AI developer changes")))
+          with open("changed_files.txt", "w", encoding="utf-8") as files:
+              files.write("\n".join(changed))
+          print("Changed files:", ", ".join(changed) if changed else "none")
           PY
 
       - name: Create branch, commit and open Pull Request
+        if: ${{ hashFiles('changed_files.txt') != '' && hashFiles('ai_dev_report.md') == '' }}
         env:
           GH_TOKEN: ${{ github.token }}
           BASE_BRANCH: ${{ github.event_name == 'workflow_dispatch' && inputs.target_branch || 'main' }}
         shell: bash
         run: |
           set -euo pipefail
-
           if [ ! -s changed_files.txt ]; then
-            echo "No file changes produced by AI."
+            echo "No source changes to commit."
             exit 0
           fi
 
@@ -179,25 +178,32 @@ jobs:
             echo "Unknown base branch: $BASE_BRANCH"
             exit 1
           }
-
           SUMMARY=$(head -c 200 ai_dev_summary.txt | tr '\n' ' ')
           BRANCH_NAME="ai-dev/${GITHUB_RUN_ID}"
-
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
           git checkout -b "$BRANCH_NAME"
-          git add -- $(cat changed_files.txt)
-          git diff --cached --quiet && {
+          while IFS= read -r path; do
+            [ -n "$path" ] && git add -- "$path"
+          done < changed_files.txt
+          if git diff --cached --quiet; then
             echo "Nothing to commit."
             exit 0
-          }
+          fi
           git commit -m "AI Dev: ${SUMMARY}"
           git push origin "HEAD:$BRANCH_NAME"
-
           gh pr create \
             --repo "${GITHUB_REPOSITORY}" \
             --base "$BASE_BRANCH" \
             --head "$BRANCH_NAME" \
             --title "AI Dev: ${SUMMARY}" \
             --body "Автоматически сгенерировано workflow AI Developer (run ${GITHUB_RUN_ID})."
+
+      - name: Upload invalid-response report
+        if: ${{ always() && hashFiles('ai_dev_report.md') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-developer-response-report-${{ github.run_id }}
+          path: ai_dev_report.md
+          if-no-files-found: error
+          retention-days: 7

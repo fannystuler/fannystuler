@@ -66,7 +66,7 @@ jobs:
           allow_ext = {".rs", ".toml", ".json", ".md", ".yml", ".yaml", ".html", ".css", ".js", ".ts", ".tsx"}
           files_context = []
           total_chars = 0
-          max_total_chars = 60000
+          max_total_chars = 30000
 
           for root, dirs, files in os.walk("."):
               dirs[:] = [d for d in dirs if d not in ignore_dirs]
@@ -82,23 +82,20 @@ jobs:
                           content = f.read()
                   except (OSError, UnicodeDecodeError):
                       continue
-                  if len(content) > 12000:
-                      content = content[:12000] + "\n... [truncated]"
+                  if len(content) > 6000:
+                      content = content[:6000] + "\n... [truncated]"
                   if total_chars + len(content) > max_total_chars:
                       continue
                   total_chars += len(content)
-                  files_context.append(f"### FILE: {rel_path}\n```\n{content}\n```" )
+                  files_context.append(f"### FILE: {rel_path}\n{content}")
 
           system_prompt = """Ты senior Rust/Tauri/Windows-разработчик проекта zapret2-gui.
           Выполняй только явно поставленную задачу.
           Верни СТРОГО валидный JSON БЕЗ Markdown и пояснений.
           Схема:
-          {
-            "summary": "краткое описание изменений",
-            "files": [{"path": "путь/к/файлу", "content": "полное новое содержимое файла"}]
-          }
-          Не используй Markdown-кодовые блоки внутри JSON.
-          Все строки в поле content должны быть корректно экранированы в JSON.
+          {"summary":"краткое описание изменений","files":[{"path":"путь/к/файлу","content":"полное новое содержимое файла"}]}
+          Поле content должно быть одной компактной JSON-строкой с экранированными переносами и кавычками.
+          Не изменяй .github/workflows.
           Не добавляй заглушки todo!() или // ..."""
 
           payload = {
@@ -107,13 +104,13 @@ jobs:
               "response_format": {"type": "json_object"},
               "messages": [
                   {"role": "system", "content": system_prompt},
-                  {"role": "user", "content": f"Задача:\n{task}\n\nФайлы репозитория:\n\n" + "\n\n".join(files_context)},
+                  {"role": "user", "content": f"Задача:\n{task}\n\nКлючевые файлы репозитория:\n\n" + "\n\n".join(files_context)},
               ],
           }
 
           req = urllib.request.Request(
               "https://api.deepseek.com/chat/completions",
-              data=json.dumps(payload).encode("utf-8"),
+              data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
               headers={
                   "Content-Type": "application/json",
                   "Authorization": f"Bearer {api_key}",

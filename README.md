@@ -24,3 +24,4 @@ cargo build --release --target x86_64-pc-windows-msvc
 ```
 
 Сборка также запускается через GitHub Actions workflow `Build Windows EXE (Rust)`.
+надо работать

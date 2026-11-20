@@ -103,6 +103,9 @@ pub fn build_args(profile: &LaunchProfile) -> Result<Vec<String>, String> {
     if profile.ports.is_empty() {
         return Err("Список портов не может быть пустым".to_string());
     }
+    if profile.ports.iter().any(|&p| p == 0) {
+        return Err("Порт не может быть 0".to_string());
+    }
 
     let mut args = Vec::new();
     if profile.debug {
@@ -144,12 +147,21 @@ pub fn build_args(profile: &LaunchProfile) -> Result<Vec<String>, String> {
 
     match profile.strategy {
         StrategyPreset::FakeAndSplit { ttl, split_pos } => {
+            if ttl == 0 {
+                return Err("TTL должен быть больше 0".to_string());
+            }
+            if split_pos == 0 || split_pos > 1500 {
+                return Err("split_pos должен быть в диапазоне 1..=1500".to_string());
+            }
             args.push("--dpi-desync".to_string());
             args.push("fake,split2".to_string());
             args.push(format!("--dpi-desync-ttl={ttl}"));
             args.push(format!("--dpi-desync-split-pos={split_pos}"));
         }
         StrategyPreset::SplitOnly { split_pos } => {
+            if split_pos == 0 || split_pos > 1500 {
+                return Err("split_pos должен быть в диапазоне 1..=1500".to_string());
+            }
             args.push("--dpi-desync".to_string());
             args.push("split2".to_string());
             args.push(format!("--dpi-desync-split-pos={split_pos}"));

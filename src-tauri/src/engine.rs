@@ -101,11 +101,21 @@ impl EngineProcessManager {
             let cb = Arc::clone(&self.log_cb);
             tokio::spawn(async move {
                 let mut reader = BufReader::new(stdout).lines();
-                while let Ok(Some(line)) = reader.next_line().await {
-                    cb(LogEntry {
-                        stream: "stdout".to_string(),
-                        message: line,
-                    });
+                loop {
+                    match reader.next_line().await {
+                        Ok(Some(line)) => cb(LogEntry {
+                            stream: "stdout".to_string(),
+                            message: line,
+                        }),
+                        Ok(None) => break,
+                        Err(e) => {
+                            cb(LogEntry {
+                                stream: "stdout".to_string(),
+                                message: format!("[ошибка чтения stdout: {e}]"),
+                            });
+                            break;
+                        }
+                    }
                 }
             });
         }
@@ -114,11 +124,21 @@ impl EngineProcessManager {
             let cb = Arc::clone(&self.log_cb);
             tokio::spawn(async move {
                 let mut reader = BufReader::new(stderr).lines();
-                while let Ok(Some(line)) = reader.next_line().await {
-                    cb(LogEntry {
-                        stream: "stderr".to_string(),
-                        message: line,
-                    });
+                loop {
+                    match reader.next_line().await {
+                        Ok(Some(line)) => cb(LogEntry {
+                            stream: "stderr".to_string(),
+                            message: line,
+                        }),
+                        Ok(None) => break,
+                        Err(e) => {
+                            cb(LogEntry {
+                                stream: "stderr".to_string(),
+                                message: format!("[ошибка чтения stderr: {e}]"),
+                            });
+                            break;
+                        }
+                    }
                 }
             });
         }
@@ -136,5 +156,13 @@ impl EngineProcessManager {
             let _ = child.wait().await;
         }
         Ok(())
+    }
+}
+
+impl Drop for EngineProcessManager {
+    fn drop(&mut self) {
+        if let Some(mut child) = self.child.take() {
+            let _ = child.start_kill();
+        }
     }
 }

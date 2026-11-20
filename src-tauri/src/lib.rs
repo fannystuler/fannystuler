@@ -29,23 +29,11 @@ pub struct EnvStatus {
     pub running: bool,
 }
 
-#[derive(Serialize)]
-pub struct CreateProfileInput {
-    pub name: String,
-    pub ports: Vec<u16>,
-    pub ttl: u8,
-    pub split_pos: usize,
-    pub debug: bool,
-}
-
 #[tauri::command]
-fn get_env_status(state: State<'_, AppState>) -> Result<EnvStatus, String> {
+async fn get_env_status(state: State<'_, AppState>) -> Result<EnvStatus, String> {
     let env = inspect_environment(None, "winws2.exe");
     let running = {
-        let mut mgr = state
-            .engine
-            .try_lock()
-            .map_err(|_| "Менеджер процесса занят".to_string())?;
+        let mut mgr = state.engine.lock().await;
         mgr.is_running()
     };
 
@@ -98,23 +86,42 @@ fn create_https_profile(
     if trimmed.is_empty() {
         return Err("Название профиля не может быть пустым".to_string());
     }
+    if trimmed.len() > 128 {
+        return Err("Название профиля слишком длинное".to_string());
+    }
 
     let mut cfg = state
         .storage
         .load_or_init()
         .map_err(|e| format!("Ошибка чтения профилей: {e}"))?;
 
+    if cfg.profiles.iter().any(|p| p.name == trimmed) {
+        return Err(format!("Профиль '{trimmed}' уже существует"));
+    }
+
+    let ports = ports.filter(|p| !p.is_empty()).unwrap_or_else(|| vec![443]);
+    if ports.iter().any(|&p| p == 0) {
+        return Err("Порт не может быть 0".to_string());
+    }
+
+    let ttl = ttl.unwrap_or(3);
+    if ttl == 0 {
+        return Err("TTL должен быть больше 0".to_string());
+    }
+
+    let split_pos = split_pos.unwrap_or(2);
+    if split_pos == 0 || split_pos > 1500 {
+        return Err("split_pos должен быть в диапазоне 1..=1500".to_string());
+    }
+
     let profile = LaunchProfile {
         name: trimmed.to_string(),
         protocol: Protocol::Tcp,
-        ports: ports.filter(|p| !p.is_empty()).unwrap_or_else(|| vec![443]),
+        ports,
         hostlist_path: Some(PathBuf::from("./lists/list-general.txt")),
         hostlist_exclude_path: None,
         lua_script_path: None,
-        strategy: StrategyPreset::FakeAndSplit {
-            ttl: ttl.unwrap_or(3),
-            split_pos: split_pos.unwrap_or(2),
-        },
+        strategy: StrategyPreset::FakeAndSplit { ttl, split_pos },
         debug: debug.unwrap_or(false),
     };
 
@@ -163,6 +170,10 @@ fn add_host_domain(state: State<'_, AppState>, domain: String) -> Result<Vec<Str
 
 #[tauri::command]
 async fn start_engine(state: State<'_, AppState>) -> Result<Vec<String>, String> {
+    if !elevation::is_elevated() {
+        return Err("Для запуска движка требуются права администратора".to_string());
+    }
+
     let env = inspect_environment(None, "winws2.exe");
     let bin_path = env
         .engine_binary
@@ -214,7 +225,7 @@ pub fn run() {
             });
 
             let app_state = AppState {
-                storage: ProfileStorage::new("./config/profiles.json"),
+                storage: ProfileStorage::new("./profiles.json"),
                 hostlist: Mutex::new(HostlistManager::new()),
                 engine: Arc::new(AsyncMutex::new(EngineProcessManager::new(log_cb))),
             };

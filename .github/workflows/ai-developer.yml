@@ -68,7 +68,9 @@ jobs:
           total_chars = 0
           max_total_chars = 120000
 
-          for root, dirs, files in os.walk("."):
+          allow_ext = {".rs", ".toml", ".json", ".md", ".yml", ".yaml"}
+          if os.path.splitext(fname)[1] not in allow_ext:
+              continue
               dirs[:] = [d for d in dirs if d not in ignore_dirs]
               for fname in sorted(files):
                   fpath = os.path.join(root, fname)

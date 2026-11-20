@@ -180,7 +180,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git checkout -b "$BRANCH_NAME"
-          git add -- $(printf '%s\n' "${CHANGED_FILES[@]}")
+          Записать список изменённых файлов в файл (например, changed_files.txt) в Python-шаге и читать его здесь: git add -- $(cat changed_files.txt)
           SUMMARY=$(head -c 200 ai_dev_summary.txt | tr '\n' ' ')
           git push -u origin "$BRANCH_NAME"
 

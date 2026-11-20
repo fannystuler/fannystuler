@@ -143,7 +143,9 @@ jobs:
 
           changed = []
           for item in result.get("files", []):
-              rel_path = item["path"].lstrip("./")
+              rel_path = os.path.normpath(item["path"])
+              if os.path.isabs(rel_path) or rel_path.startswith(".."):
+                  raise SystemExit(f"Refusing unsafe path: {rel_path}")
               new_content = item["content"]
               os.makedirs(os.path.dirname(rel_path) or ".", exist_ok=True)
               with open(rel_path, "w", encoding="utf-8", newline="\n") as f:

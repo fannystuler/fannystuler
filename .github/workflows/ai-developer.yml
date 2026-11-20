@@ -24,7 +24,9 @@ jobs:
   develop:
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'ai-dev'))
+      if: >-
+        github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'ai-dev') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association))
     runs-on: ubuntu-latest
 
     steps:

@@ -185,7 +185,7 @@ jobs:
           BRANCH_NAME="ai-dev/issue-${ISSUE_NUMBER:-${GITHUB_RUN_ID}}"
 
           gh pr create \
-            --base "${BASE_BRANCH}" \
+            git ls-remote --exit-code --heads origin "$BASE_BRANCH" >/dev/null || { echo "Unknown base branch: $BASE_BRANCH"; exit 1; }
             --head "$BRANCH_NAME" \
             --title "AI Dev: ${SUMMARY}" \
             --body "Автоматически сгенерировано workflow \`AI Developer\` (run \`${GITHUB_RUN_ID}\`)."
